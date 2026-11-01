@@ -1,0 +1,10 @@
+dist/
+*.log
+*.sarif
+.DS_Store
+Thumbs.db
+/githookdoctor
+/githookdoctor.exe
+/ghd
+/ghd.exe
+broken-hooks-demo/

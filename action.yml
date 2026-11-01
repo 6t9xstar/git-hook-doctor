@@ -1,0 +1,59 @@
+name: 'GitHookDoctor - Git hooks troubleshooter'
+description: 'Check Husky, Lefthook, pre-commit and plain Git hooks in CI: executable bits, CRLF line endings, shebangs, deprecated Husky lines and invalid configs.'
+author: '6t9xstar'
+branding:
+  icon: 'git-commit'
+  color: 'orange'
+
+inputs:
+  path:
+    description: 'Repository directory to check'
+    required: false
+    default: '.'
+  static:
+    description: 'Only check committed files (hooks are not installed in CI). Set to "false" to inspect the runner checkout like a developer machine.'
+    required: false
+    default: 'true'
+  fail-on:
+    description: 'Fail on findings of this severity or higher: error, warning, info or none'
+    required: false
+    default: 'error'
+  sarif-output:
+    description: 'Optional path to write a SARIF report (for github/codeql-action/upload-sarif)'
+    required: false
+    default: ''
+  args:
+    description: 'Extra arguments for githookdoctor diagnose'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache-dependency-path: ${{ github.action_path }}/go.sum
+    - name: Build GitHookDoctor
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: go build -trimpath -o "$RUNNER_TEMP/githookdoctor" ./cmd/githookdoctor
+    - name: Check Git hooks
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_STATIC: ${{ inputs.static }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_SARIF: ${{ inputs.sarif-output }}
+        INPUT_ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        GHD="$RUNNER_TEMP/githookdoctor"
+        EXTRA=()
+        if [ "$INPUT_STATIC" = "true" ]; then EXTRA+=(--static); fi
+        if [ -n "$INPUT_ARGS" ]; then read -r -a ARGS <<< "$INPUT_ARGS"; EXTRA+=("${ARGS[@]}"); fi
+        "$GHD" diagnose -C "$INPUT_PATH" ${EXTRA[@]+"${EXTRA[@]}"} --format markdown --fail-on none >> "$GITHUB_STEP_SUMMARY"
+        if [ -n "$INPUT_SARIF" ]; then
+          "$GHD" diagnose -C "$INPUT_PATH" ${EXTRA[@]+"${EXTRA[@]}"} --format sarif -o "$INPUT_SARIF" --fail-on none
+        fi
+        "$GHD" diagnose -C "$INPUT_PATH" ${EXTRA[@]+"${EXTRA[@]}"} --format github --fail-on "$INPUT_FAIL_ON"

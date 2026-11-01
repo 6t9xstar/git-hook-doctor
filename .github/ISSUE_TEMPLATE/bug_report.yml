@@ -1,0 +1,25 @@
+name: Bug report
+description: GitHookDoctor reported something wrong, missed a problem or crashed
+labels: [bug]
+body:
+  - type: textarea
+    id: input
+    attributes:
+      label: the output of githookdoctor diagnose --format markdown
+      description: The smallest input that reproduces the problem (remove secrets and tokens).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and OS
+      placeholder: githookdoctor --version, Windows / macOS / Linux
+    validations:
+      required: true

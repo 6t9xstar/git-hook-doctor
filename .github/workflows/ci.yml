@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Go on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: test -z "$(gofmt -l .)"
+      - name: Diagnose a deliberately broken repository
+        shell: bash
+        run: |
+          go build -o ghd ./cmd/githookdoctor
+          ./examples/make-broken-repo.sh "$RUNNER_TEMP/broken"
+          set +e
+          ./ghd diagnose -C "$RUNNER_TEMP/broken" --no-color
+          code=$?
+          set -e
+          test "$code" = 1
+          ./ghd fix -C "$RUNNER_TEMP/broken"
+
+  action:
+    name: GitHub Action self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check this repository (static)
+        uses: ./
+        with:
+          sarif-output: githookdoctor.sarif
+      - run: jq -e '.runs[0].tool.driver.name == "GitHookDoctor"' githookdoctor.sarif
+      - run: ./examples/make-broken-repo.sh "$RUNNER_TEMP/broken"
+      - name: Broken repository fails
+        id: broken
+        continue-on-error: true
+        uses: ./
+        with:
+          path: ${{ runner.temp }}/broken
+          static: 'false'
+      - name: Expect the broken repository to fail
+        if: steps.broken.outcome != 'failure'
+        run: exit 1
